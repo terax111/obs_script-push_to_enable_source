@@ -1,11 +1,15 @@
 import obspython as obs
 import ntpath
+from threading import Thread
+import time
 
 hotkey_id_array = []
 hotkey_names_by_id = {}
 
 source_to_toggle = None
 invert_bool = False
+start_delay = 0
+end_delay = 0
 
 
 def script_load(settings):
@@ -34,7 +38,7 @@ def script_save(settings):
 
 def script_update(settings):
     # print("script update")
-    global source_to_toggle, invert_bool
+    global source_to_toggle, invert_bool, start_delay, end_delay
 
     source_to_toggle = obs.obs_data_get_string(settings, "source_select_list")
     # print("source_to_toggle", source_to_toggle)
@@ -42,6 +46,8 @@ def script_update(settings):
         source_to_toggle = None
 
     invert_bool = obs.obs_data_get_bool(settings, "invert_bool")
+    start_delay = obs.obs_data_get_int(settings, "start_delay")
+    end_delay = obs.obs_data_get_int(settings, "end_delay")
     enable_source(invert_bool)
 
 
@@ -51,6 +57,8 @@ def script_properties():
 
     drop_list = obs.obs_properties_add_list(props, "source_select_list", "Source to toggle", obs.OBS_COMBO_TYPE_LIST, obs.OBS_COMBO_FORMAT_STRING)
     obs.obs_property_list_add_string(drop_list, "", "")
+    obs.obs_properties_add_int(props, "start_delay", "Press Delay (in ms)", 0, 999999999, 10)
+    obs.obs_properties_add_int(props, "end_delay", "Release Delay (in ms)", 0, 999999999, 10)
 
     sources = obs.obs_enum_sources()
     for src in sources:
@@ -65,12 +73,17 @@ def script_properties():
 def hotkey_1_callback(is_pressed):
     # print(f"-- Shortcut 1 ; Data: {data}")
     if is_pressed:
-        enable_source(not invert_bool)
+        t = Thread(target=lambda: enable_source(not invert_bool, start_delay))
+        t.setDaemon(True)
+        t.start()
     else:
-        enable_source(invert_bool)
+        t = Thread(target=lambda: enable_source(invert_bool, end_delay))
+        t.setDaemon(True)
+        t.start()
 
 
-def enable_source(boolean):
+def enable_source(boolean, delay=0):
+    time.sleep(delay/1000)
     scene_sources = obs.obs_frontend_get_scenes()
     for scn_src in scene_sources:
         scn = obs.obs_scene_from_source(scn_src)
